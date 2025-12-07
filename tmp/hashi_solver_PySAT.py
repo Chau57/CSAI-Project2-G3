@@ -43,55 +43,56 @@ class HashiSolver:
                         self.cnf_clauses.append([-vars[i], -vars[j]])
                         
     def generate_flow_constraints(self):
-        for r in range(self.rows):
-            for c in range(self.cols):
-                if self.grid[r][c] > 0: continue # Bỏ qua đảo
+            for r in range(self.rows):
+                for c in range(self.cols):
+                    if self.grid[r][c] > 0: continue # Bỏ qua đảo
 
-                # --- Xử lý Cầu Ngang (k=1, k=2) ---
-                for k in [1, 2]: 
-                    curr_var = self.get_var_id(r, c, k)
-                    
-                    # Kiểm tra ô bên Phải (Right)
-                    if c + 1 < self.cols: # Còn trong biên
-                        if self.grid[r][c+1] > 0: 
-                            pass # Gặp đảo -> OK, không cần thêm luật
+                    # --- Xử lý Cầu Ngang (k=1, k=2) ---
+                    for k in [1, 2]: 
+                        curr_var = self.get_var_id(r, c, k)
+                        
+                        # 1. Kiểm tra bên PHẢI (Right)
+                        if c + 1 < self.cols:
+                            if self.grid[r][c+1] == 0: # Nếu là ô thường
+                                next_var = self.get_var_id(r, c+1, k)
+                                # Current -> Next <=> -Current v Next
+                                self.cnf_clauses.append([-curr_var, next_var])
                         else:
-                            # Gặp ô thường -> Ô đó phải là cầu cùng loại k
-                            next_var = self.get_var_id(r, c+1, k)
-                            # Logic: curr -> next <=> -curr v next
-                            self.cnf_clauses.append([-curr_var, next_var])
-                    else:
-                        # Hết biên -> Không thể là cầu ngang
-                        self.cnf_clauses.append([-curr_var])
+                            # Chạm biên phải -> Cấm
+                            self.cnf_clauses.append([-curr_var])
 
-                    # Kiểm tra ô bên Trái (Left) -> Tương tự hoặc bỏ qua nếu duyệt 1 chiều
-                    # (Lưu ý: Thường chỉ cần duyệt forward (phải/dưới) HOẶC 
-                    # duyệt cả 2 chiều để chặt chẽ. Đơn giản nhất là check biên:
-                    # Nếu c-1 < 0 thì không thể là cầu ngang).
-                    if c - 1 < 0:
-                         self.cnf_clauses.append([-curr_var])
-
-                # --- Xử lý Cầu Dọc (k=3, k=4) ---
-                # (Bạn tự implement tương tự cho r+1 và r-1)
-                for k in [3, 4]:
-                    curr_var = self.get_var_id(r, c, k)
-                    
-                    # Kiểm tra ô bên Dưới (Down)
-                    if r + 1 < self.rows: # Còn trong biên
-                        if self.grid[r+1][c] > 0: 
-                            pass # Gặp đảo -> OK, không cần thêm luật
+                        # 2. Kiểm tra bên TRÁI (Left) - QUAN TRỌNG: Cần thêm logic này
+                        if c - 1 >= 0:
+                            if self.grid[r][c-1] == 0: # Nếu bên trái là ô thường
+                                prev_var = self.get_var_id(r, c-1, k)
+                                # Current -> Prev <=> -Current v Prev
+                                # Nếu tôi là cầu, thì ô đằng sau lưng tôi cũng phải là cầu nối tiếp
+                                self.cnf_clauses.append([-curr_var, prev_var])
                         else:
-                            # Gặp ô thường -> Ô đó phải là cầu cùng loại k
-                            next_var = self.get_var_id(r+1, c, k)
-                            # Logic: curr -> next <=> -curr v next
-                            self.cnf_clauses.append([-curr_var, next_var])
-                    else:
-                        # Hết biên -> Không thể là cầu dọc
-                        self.cnf_clauses.append([-curr_var])
+                            # Chạm biên trái -> Cấm
+                            self.cnf_clauses.append([-curr_var])
 
-                    # Kiểm tra ô bên Trên (Up)
-                    if r - 1 < 0:
-                         self.cnf_clauses.append([-curr_var])
+                    # --- Xử lý Cầu Dọc (k=3, k=4) ---
+                    for k in [3, 4]:
+                        curr_var = self.get_var_id(r, c, k)
+                        
+                        # 1. Kiểm tra bên DƯỚI (Down)
+                        if r + 1 < self.rows: 
+                            if self.grid[r+1][c] == 0:
+                                next_var = self.get_var_id(r+1, c, k)
+                                self.cnf_clauses.append([-curr_var, next_var])
+                        else:
+                            self.cnf_clauses.append([-curr_var])
+
+                        # 2. Kiểm tra bên TRÊN (Up) - QUAN TRỌNG: Cần thêm logic này
+                        if r - 1 >= 0:
+                            if self.grid[r-1][c] == 0: # Nếu bên trên là ô thường
+                                prev_var = self.get_var_id(r-1, c, k)
+                                # Current -> Prev <=> -Current v Prev
+                                self.cnf_clauses.append([-curr_var, prev_var])
+                        else:
+                            # Chạm biên trên -> Cấm
+                            self.cnf_clauses.append([-curr_var])
 
     def generate_island_constraints(self):
         for r in range(self.rows):
@@ -156,8 +157,8 @@ class HashiSolver:
             return None # Không tìm thấy lời giải
 
     def parse_model(self, model):
-        # Tạo bảng kết quả rỗng
-        result = [[" " for _ in range(self.cols)] for _ in range(self.rows)]
+        # Tạo bảng kết quả với những vị trí của đảo ban đầu
+        result = [[str(self.grid[r][c]) if self.grid[r][c] != 0 else " " for c in range(self.cols)] for r in range(self.rows)]
         
         # Chỉ quan tâm các biến True dương
         for var in model:
