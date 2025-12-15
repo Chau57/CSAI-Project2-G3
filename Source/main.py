@@ -9,4 +9,3 @@ from pathlib import Path
 
 from io_handler import parse_input_file, write_output_file
 import numpy as np
-

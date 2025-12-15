@@ -1,33 +1,67 @@
 """
 I/O handler for Hashiwokakero puzzle.
 
-Provides:
-- `parse_input_file(filepath, as_numpy=True)`: read a text input and return a 2D int grid
-  (as a NumPy array when `as_numpy=True`).
-- `write_output_file(grid, bridges, output_path)`: write an ASCII representation
+SIMPLE & CLEAN DESIGN:
+- Bridge format: {'from': (r,c), 'to': (r,c), 'count': 1-2}
+- Direction is AUTO-DETECTED from coordinates (no need to store!)
 
-The parser is permissive: non-integer tokens are treated as 0. The writer
-accepts either a Python list-of-lists or a NumPy 2D array.
+Usage:
+    grid = parse_input_file("input-01.txt")
+    bridges = [
+        {'from': (0,1), 'to': (0,3), 'count': 2},
+        {'from': (0,1), 'to': (2,1), 'count': 1},
+    ]
+    write_output_file(grid, bridges, "output-01.txt")
 """
 from pathlib import Path
-from typing import Optional, Any
-
+from typing import List, Dict, Tuple, Any
 import numpy as np
+from helper_01 import *
+# ============================================================================
+# HELPER: Direction Detection
+# ============================================================================
 
-
-def parse_input_file(filepath: str, as_numpy: bool = True) -> Any:
-    """Parse a simple comma-separated input file into a 2D integer grid.
-
-    Each non-empty line is interpreted as a row. Values are comma-separated.
-    Non-integer tokens are treated as 0.
-
+def _get_direction(island1: Tuple[int, int], island2: Tuple[int, int]) -> str:
+    """
+    Auto-detect bridge direction from island coordinates.
+    
     Args:
-        filepath: path to input file
-        as_numpy: if True, return a `numpy.ndarray` (dtype=int); otherwise
-                  return a Python list of lists.
-
+        island1: (row, col) of first island
+        island2: (row, col) of second island
+        
     Returns:
-        `numpy.ndarray` or `list[list[int]]` depending on `as_numpy`.
+        'h' for horizontal, 'v' for vertical
+        
+    Raises:
+        ValueError: If islands are not aligned horizontally or vertically
+    """
+    r1, c1 = island1
+    r2, c2 = island2
+    
+    if r1 == r2:
+        return 'h'
+    elif c1 == c2:
+        return 'v'
+    else:
+        raise ValueError(f"Islands at {island1} and {island2} are not aligned")
+# ============================================================================
+# INPUT PARSING
+# ============================================================================
+
+def parse_input_file(filepath: str) -> np.ndarray:
+    """
+    Parse comma-separated input file into 2D numpy array.
+    
+    Args:
+        filepath: Path to input file
+        
+    Returns:
+        2D numpy array with islands (1-8) and empty cells (0)
+        
+    Example:
+        >>> grid = parse_input_file("input-01.txt")
+        >>> print(grid.shape)
+        (7, 7)
     """
     p = Path(filepath)
     if not p.exists():
@@ -52,57 +86,84 @@ def parse_input_file(filepath: str, as_numpy: bool = True) -> Any:
             rows.append(row)
 
     if not rows:
-        # return empty array/list
-        return np.array(rows, dtype=int) if as_numpy else rows
+        return np.array([], dtype=int).reshape(0, 0)
 
-    # Normalize row lengths by padding with zeros if needed
+    # Normalize row lengths
     max_len = max(len(r) for r in rows)
     norm = [r + [0] * (max_len - len(r)) for r in rows]
 
-    if as_numpy:
-        return np.array(norm, dtype=int)
-    return norm
+    return np.array(norm, dtype=int)
 
 
-def _grid_to_lines(grid_arr: np.ndarray) -> list:
-    """Convert a 2D integer NumPy array into printable ASCII lines.
+# ============================================================================
+# OUTPUT WRITING
+# ============================================================================
 
-    Islands (>0) are printed as their number; empty cells (0) are printed
-    as a single space. Cells are separated by a single space.
+def write_output_file(grid: np.ndarray, bridges: BridgeList, output_path: str) -> str:
     """
-    lines = []
-    for r in grid_arr:
-        tokens = [str(int(v)) if v != 0 else " " for v in r]
-        lines.append(" ".join(tokens))
-    return lines
-
-
-def write_output_file(grid: Any, bridges: Optional[Any], output_path: str) -> str:
-    """Write a simple ASCII output representing the grid and (optionally)
-    bridge markers.
-
-    `grid` may be a NumPy array or a list of lists. `bridges` is accepted for
-    future use (solver can pass a structure describing bridges). For now the
-    function writes the island numbers and blanks for empty cells.
-
-    Returns the path written.
+    Write solution to file in project format.
+    
+    Args:
+        grid: Input grid with islands
+        bridges: List of bridge dictionaries
+                 Format: [{'from': (r,c), 'to': (r,c), 'count': 1-2}, ...]
+        output_path: Where to save the output
+        
+    Returns:
+        Absolute path of the saved file
+        
+    Example:
+        >>> grid = parse_input_file("input-01.txt")
+        >>> bridges = [
+        ...     {'from': (0,1), 'to': (0,3), 'count': 2},
+        ...     {'from': (0,1), 'to': (2,1), 'count': 1},
+        ... ]
+        >>> write_output_file(grid, bridges, "output-01.txt")
     """
+    rows, cols = grid.shape
+    
+    # Initialize output grid with quoted "0" for empty cells
+    output_grid = [['"0"' for _ in range(cols)] for _ in range(rows)]
+    
+    # Place islands first
+    for r in range(rows):
+        for c in range(cols):
+            if grid[r, c] > 0:
+                output_grid[r][c] = f'"{grid[r, c]}"'
+    
+    # Place bridges
+    for bridge in bridges:
+        island1 = bridge['from']
+        island2 = bridge['to']
+        count = bridge['count']
+        
+        r1, c1 = island1
+        r2, c2 = island2
+        
+        # Auto-detect direction
+        direction = _get_direction(island1, island2)
+        
+        if direction == 'h':
+            # Horizontal bridge
+            symbol = '"="' if count == 2 else '"-"'
+            for c in range(min(c1, c2) + 1, max(c1, c2)):
+                output_grid[r1][c] = symbol
+                
+        elif direction == 'v':
+            # Vertical bridge
+            symbol = '"$"' if count == 2 else '"|"'
+            for r in range(min(r1, r2) + 1, max(r1, r2)):
+                output_grid[r][c1] = symbol
+    
+    # Write to file
     out_path = Path(output_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Convert to NumPy array for uniform handling
-    if isinstance(grid, list):
-        # assume list of lists
-        grid_arr = np.array(grid, dtype=int)
-    elif isinstance(grid, np.ndarray):
-        grid_arr = grid.astype(int)
-    else:
-        raise TypeError("grid must be a list of lists or a numpy.ndarray")
-
-    lines = _grid_to_lines(grid_arr)
-
+    
     with out_path.open("w", encoding="utf-8") as f:
-        for ln in lines:
-            f.write(ln + "\n")
+        for row in output_grid:
+            line = "[" + ", ".join(row) + "]\n"
+            f.write(line)
+    
+    return str(out_path.absolute())
 
-    return str(out_path)
+
