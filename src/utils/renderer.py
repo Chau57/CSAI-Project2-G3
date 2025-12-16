@@ -30,8 +30,8 @@ def render_solution(puzzle: Puzzle, state: Dict[int, int]) -> List[List[str]]:
     """
     # Start from original grid
     grid = [
-        [str(puzzle.grid[r, c]) if puzzle.grid[r, c] > 0 else ' '
-         for c in range(puzzle.cols)]
+        [str(puzzle.grid[r, c]) if puzzle.grid[r, c] > 0 else '0'
+        for c in range(puzzle.cols)]
         for r in range(puzzle.rows)
     ]
 

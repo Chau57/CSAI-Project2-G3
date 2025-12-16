@@ -81,7 +81,7 @@ def write_output(
     solver_name: str,
     index: int,
     grid: List[List[str]],
-    output_root: str = "../data/outputs"
+    output_root: str = "data/outputs"
 ) -> None:
     """
     Write solution grid to a solver-specific output directory.
@@ -101,13 +101,13 @@ def write_output(
         Root output directory
     """
     solver_dir = Path(output_root) / solver_name
-    solver_dir.mkdir(parents=True, exist_ok=True)
+    solver_dir.mkdir(parents='True', exist_ok=True)
 
     output_path = solver_dir / f"output-{index:02d}.txt"
 
     with output_path.open("w", encoding="utf-8") as f:
         for row in grid:
-            f.write(" ".join(row) + "\n")
+            f.write(",".join(row) + "\n")
 
 
 # ----------------------------------------------------------------------

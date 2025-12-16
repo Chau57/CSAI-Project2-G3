@@ -10,7 +10,7 @@ from itertools import product
 
 from core.puzzle import Puzzle
 from core.constraints import (
-    check_degree,
+    check_degree_exact as check_degree,
     check_crossing,
     check_connected
 )
