@@ -1,72 +1,55 @@
 """
-Brute Force Algorithm for Hashiwokakero
-TODO: Implement by team member
+Brute-force solver for Hashiwokakero.
+
+This solver enumerates all possible bridge assignments
+and checks them against the problem constraints.
 """
-from typing import List, Optional
+
+from typing import Dict, Optional
+from itertools import product
+
+from core.puzzle import Puzzle
+from core.constraints import (
+    check_degree,
+    check_crossing,
+    check_connected
+)
 from .base_solver import BaseSolver
 
 
-class BruteforceSolver(BaseSolver):
+class BruteForceSolver(BaseSolver):
     """
-    Brute force implementation for Hashiwokakero
-    
-    TODO: Implement the following:
-    1. Generate all possible assignments
-    2. Check each assignment against constraints
-    3. Return first valid solution
-    
-    Warning: This approach has exponential time complexity!
-    For a grid with N empty cells and 5 possible states each,
-    there are 5^N possible assignments to check.
-    
-    Use only for small puzzles or for comparison purposes.
+    Solve Hashiwokakero using brute-force search.
     """
-    
-    def __init__(self):
-        """Initialize brute force solver"""
-        super().__init__()
-    
-    def solve(self, grid) -> Optional[List[List[str]]]:
+
+    def solve(self, puzzle: Puzzle) -> Optional[Dict[int, int]]:
         """
-        Solve puzzle using brute force
-        
-        Args:
-            grid: Puzzle grid
-            
-        Returns:
-            Solution or None if no solution found
+        Attempt to solve the puzzle by enumerating all states.
+
+        Parameters
+        ----------
+        puzzle : Puzzle
+            The puzzle instance
+
+        Returns
+        -------
+        Optional[Dict[int, int]]
+            A valid state if found, otherwise None
         """
-        # TODO: Implement brute force algorithm
-        raise NotImplementedError(
-            "Brute force solver not yet implemented. "
-            "Please implement this solver using exhaustive search."
-        )
-    
-    def generate_all_assignments(self, empty_cells):
-        """
-        Generate all possible assignments for empty cells
-        
-        TODO: Implement assignment generation
-        
-        Args:
-            empty_cells: List of empty cell positions
-            
-        Yields:
-            Complete assignments (one at a time to save memory)
-        """
-        raise NotImplementedError("Assignment generation not implemented")
-    
-    def check_solution(self, grid, assignment) -> bool:
-        """
-        Check if an assignment is a valid solution
-        
-        TODO: Implement solution checking
-        
-        Args:
-            grid: Original puzzle grid
-            assignment: Cell assignments to check
-            
-        Returns:
-            True if valid solution, False otherwise
-        """
-        raise NotImplementedError("Solution checking not implemented")
+        num_edges = len(puzzle.edges)
+
+        # Each edge can have 0, 1, or 2 bridges
+        for assignment in product([0, 1, 2], repeat=num_edges):
+            state = {i: assignment[i] for i in range(num_edges)}
+
+            # Constraint checking
+            if not check_crossing(puzzle, state):
+                continue
+            if not check_degree(puzzle, state):
+                continue
+            if not check_connected(puzzle, state):
+                continue
+
+            return state
+
+        return None
