@@ -1,93 +1,129 @@
 """
-I/O Handler for reading input files and writing output files
+Input/Output utilities for Hashiwokakero project.
+
+This module handles:
+- Reading puzzle input files
+- Writing solution grids to output files
+- Displaying solutions in console
+
+This module is solver-independent.
 """
+
 from pathlib import Path
-from typing import List, Union
+from typing import List
 import numpy as np
 
 
-def read_input(filepath: str) -> np.ndarray:
+# ----------------------------------------------------------------------
+# Input handling
+# ----------------------------------------------------------------------
+
+def read_input(filepath: str) -> List[List[int]]:
     """
-    Read puzzle input from file
-    
-    Args:
-        filepath: Path to input file
-        
-    Returns:
-        2D numpy array representing the puzzle grid
-        
-    Format:
-        - Each line is a row
-        - Numbers separated by spaces or commas
-        - Islands are numbers 1-8, empty cells are 0
+    Read a Hashiwokakero puzzle from an input file.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the input file
+
+    Returns
+    -------
+    List[List[int]]
+        2D grid where:
+        - 0 represents an empty cell
+        - Positive integers represent islands
     """
     path = Path(filepath)
     if not path.exists():
         raise FileNotFoundError(f"Input file not found: {filepath}")
-    
-    grid = []
-    with open(filepath, 'r', encoding='utf-8') as f:
+
+    grid: List[List[int]] = []
+
+    with path.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
-            # Support both comma and space separated
-            line = line.replace(',', ' ')
-            row = [int(x) for x in line.split()]
+
+            # Support space- or comma-separated format
+            tokens = line.replace(",", " ").split()
+            row = [int(token) for token in tokens]
             grid.append(row)
-    
-    return np.array(grid, dtype=int)
+
+    return grid
 
 
-def write_output(filepath: str, result: List[List[str]]) -> None:
+def read_input_numpy(filepath: str) -> np.ndarray:
     """
-    Write solution to output file
-    
-    Args:
-        filepath: Path to output file
-        result: 2D list of strings representing the solution
-        
-    Format:
-        Each line is formatted as: ["char1", "char2", ...]
+    Read input file and return a NumPy array.
+
+    This function is provided for convenience only.
+    Core logic should use Python lists.
+
+    Parameters
+    ----------
+    filepath : str
+
+    Returns
+    -------
+    np.ndarray
+        2D numpy array of the puzzle grid
     """
-    path = Path(filepath)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(filepath, 'w', encoding='utf-8') as f:
-        for row in result:
-            formatted_row = '["' + '", "'.join(row) + '"]'
-            f.write(formatted_row + '\n')
+    return np.array(read_input(filepath), dtype=int)
 
 
-def display_solution(result: List[List[str]]) -> None:
+# ----------------------------------------------------------------------
+# Output handling
+# ----------------------------------------------------------------------
+
+def write_output(
+    solver_name: str,
+    index: int,
+    grid: List[List[str]],
+    output_root: str = "data/outputs"
+) -> None:
     """
-    Display solution in console
-    
-    Args:
-        result: 2D list of strings representing the solution
+    Write solution grid to a solver-specific output directory.
+
+    Output file format:
+        outputs/<solver_name>/output-XX.txt
+
+    Parameters
+    ----------
+    solver_name : str
+        Name of the solver (e.g., bruteforce, sat)
+    index : int
+        Test case index
+    grid : List[List[str]]
+        Rendered solution grid
+    output_root : str, optional
+        Root output directory
+    """
+    solver_dir = Path(output_root) / solver_name
+    solver_dir.mkdir(parents='True', exist_ok=True)
+
+    output_path = solver_dir / f"output-{index:02d}.txt"
+
+    with output_path.open("w", encoding="utf-8") as f:
+        for row in grid:
+            f.write(",".join(row) + "\n")
+
+
+# ----------------------------------------------------------------------
+# Display utilities
+# ----------------------------------------------------------------------
+
+def display_solution(grid: List[List[str]]) -> None:
+    """
+    Print a solution grid to the console.
+
+    Parameters
+    ----------
+    grid : List[List[str]]
+        Rendered solution grid
     """
     print("\n=== Solution ===")
-    for row in result:
-        print(' '.join(row))
+    for row in grid:
+        print(" ".join(row))
     print()
-
-
-def read_input_simple(filepath: str) -> List[List[int]]:
-    """
-    Simple version that returns Python list instead of numpy array
-    
-    Args:
-        filepath: Path to input file
-        
-    Returns:
-        2D list of integers
-    """
-    grid = []
-    with open(filepath, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                line = line.replace(',', ' ')
-                row = [int(x) for x in line.split()]
-                grid.append(row)
-    return grid
