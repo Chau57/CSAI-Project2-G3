@@ -9,6 +9,7 @@ Hashiwokakero (橋をかけろ, tiếng Nhật nghĩa là "Xây cầu") là mộ
 - Cầu chỉ có thể ngang hoặc dọc
 - Cầu không được giao nhau
 - Có thể có 1 hoặc 2 cầu giữa hai đảo
+- Tất cả các đảo phải được kết nối thành một mạng lưới liên thông
 
 ## 🏗️ Cấu trúc Project
 
@@ -23,18 +24,16 @@ hashiwokakero/
 │   ├── solvers/        # Các thuật toán solver
 │   │   ├── base_solver.py       # Abstract base class
 │   │   ├── pysat_solver.py      # ✅ PySAT implementation
-│   │   ├── astar_solver.py      # 🔄 A* search (TODO)
-│   │   ├── backtracking_solver.py  # 🔄 Backtracking (TODO)
-│   │   └── bruteforce_solver.py    # 🔄 Brute force (TODO)
+│   │   ├── astar_solver.py      # 🔄 A* search
+│   │   ├── backtracking_solver.py  # 🔄 Backtracking
+│   │   └── bruteforce_solver.py    # 🔄 Brute force
 │   ├── utils/          # I/O và CNF generation
 │   │   └── io_handler.py
 │   └── benchmark/      # So sánh performance
 │       └── comparator.py
-├── data/
-│   ├── inputs/         # Test cases
-│   └── outputs/        # Kết quả
-├── tests/              # Unit tests
-└── docs/               # Documentation
+└── data/
+    ├── inputs/         # Test cases
+    └── outputs/        # Kết quả
 ```
 
 ## 🚀 Cài đặt
@@ -155,7 +154,7 @@ Ký hiệu:
 
 ## 👥 Phân công
 
-- **Thành viên 1**: PySAT Solver (✅ Đã hoàn thành)
+- **Thành viên 1**: PySAT Solver
 - **Thành viên 2**: A* Search Algorithm
 - **Thành viên 3**: Brute Force & Backtracking
 
