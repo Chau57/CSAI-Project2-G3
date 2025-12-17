@@ -23,7 +23,7 @@ hashiwokakero/
 │   │   └── variables.py
 │   ├── solvers/        # Các thuật toán solver
 │   │   ├── base_solver.py       # Abstract base class
-│   │   ├── pysat_solver.py      # ✅ PySAT implementation
+│   │   ├── pysat_solver.py      # ✅ PySAT (edge-based CNF)
 │   │   ├── astar_solver.py      # 🔄 A* search
 │   │   ├── backtracking_solver.py  # 🔄 Backtracking
 │   │   └── bruteforce_solver.py    # 🔄 Brute force
@@ -40,6 +40,10 @@ hashiwokakero/
 
 ```bash
 cd hashiwokakero
+# (Khuyến nghị) Tạo virtualenv và kích hoạt
+python -m venv .venv
+source .venv/bin/activate
+
 pip install -r requirements.txt
 ```
 
@@ -82,21 +86,19 @@ python main.py "data/inputs/*.txt" --benchmark -v
 
 ### ✅ Đã hoàn thành
 
-1. **Define Logical Variables**: Mỗi ô trong ma trận được gán 5 biến logic
-   - k=0: Empty (không có cầu)
-   - k=1: Horizontal Single (-)
-   - k=2: Horizontal Double (=)
-   - k=3: Vertical Single (|)
-   - k=4: Vertical Double ($)
+1. **Edge Logical Variables (PySAT)**: Mỗi cạnh có 2 biến logic (edge-based, đồng nhất với A*/Backtracking)
+   - `b1(e)`: Cạnh e có ít nhất 1 cầu (≥1)
+   - `b2(e)`: Cạnh e có đúng 2 cầu (=2), với ràng buộc `b2 → b1`
 
-2. **CNF Constraints**: Đã formulate các constraint theo CNF
-   - Cell constraints: Mỗi ô có đúng 1 trạng thái
-   - Flow constraints: Cầu phải nối liền
-   - Island constraints: Mỗi đảo có đúng số cầu yêu cầu
+2. **CNF Constraints (Edge-Based)**: Mã hóa các ràng buộc theo cạnh
+   - Implication: `¬b2(e) ∨ b1(e)` cho mọi cạnh e
+   - Crossing: Hai cạnh cắt nhau không thể đồng thời có cầu: `¬b1(e1) ∨ ¬b1(e2)`
+   - Island Degree: Tổng số cầu kề với mỗi đảo bằng giá trị trên đảo (dùng `CardEnc.equals` với trọng số từ `b1` và `b2`)
+   - Connectivity: Kiểm tra liên thông bằng BFS sau khi SAT trả lời; nếu chưa liên thông, thêm blocking clause và giải tiếp (lazy check)
 
-3. **Automate CNF Generation**: Tự động sinh CNF từ puzzle
+3. **Automate CNF Generation**: Tự động sinh CNF theo cấu trúc `Puzzle` (islands, edges, intersections, adjacency)
 
-4. **PySAT Solver**: Sử dụng thư viện PySAT để giải SAT problem
+4. **PySAT Solver**: Sử dụng thư viện PySAT để giải bài toán SAT với encoding theo cạnh
 
 ### 🔄 TODO (cho các thành viên khác)
 
