@@ -9,17 +9,14 @@ import os
 from pathlib import Path
 import glob
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
-
-from utils.io_handler import read_input, display_solution
+from src.utils.io_handler import read_input, display_solution
 
 # --- 1. IMPORT ĐẦY ĐỦ CÁC SOLVER ---
-from solvers.pysat_solver import PySATSolver
-from solvers.backtracking_solver import BacktrackingSolver
-from solvers.astar_solver import AStarSolver
-from solvers.bruteforce_solver import BruteForceSolver
-from benchmark.comparator import compare_solvers, print_comparison_table, benchmark_on_multiple_inputs
+from src.solvers.pysat_solver import PySATSolver
+from src.solvers.backtracking_solver import BacktrackingSolver
+from src.solvers.astar_solver import AStarSolver
+from src.solvers.bruteforce_solver import BruteForceSolver
+from src.benchmark.comparator import compare_solvers, print_comparison_table, benchmark_on_multiple_inputs
 
 def save_to_file_manual(filepath, grid):
     """Hàm lưu file thủ công để đảm bảo chạy được mọi lúc"""
