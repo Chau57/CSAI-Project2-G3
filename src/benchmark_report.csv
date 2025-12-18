@@ -42,4 +42,4 @@ input-09.txt,BruteForceSolver,TIMEOUT,300.0051,0.0812,False,False,False,False
 input-10.txt,PySATSolver,OK,0.5346,1.1667,True,True,True,True
 input-10.txt,AStarSolver,TIMEOUT,312.4707,2062.4956,False,False,False,False
 input-10.txt,BacktrackingSolver,TIMEOUT,300.0024,0.1843,False,False,False,False
-input-10.txt,BruteForceSolver,TIMEOUT,1196.6548,0.0957,False,False,False,False
+input-10.txt,BruteForceSolver,TIMEOUT,300.0548,0.0957,False,False,False,False
