@@ -1,0 +1,7 @@
+Logging started. Log file: d:\HCMUS\NAM 3 - HK1 - NH 2025-2026\AI\CSAI-Project2-G3\data\outputs\log_chay_thuc_te.txt
+Found 11 inputs.
+Saving outputs to: d:\HCMUS\NAM 3 - HK1 - NH 2025-2026\AI\CSAI-Project2-G3\data\outputs
+--------------------------------------------------------------------------------
+
+Processing: input-00.txt...
+  > PySATSolver (Reference)... 
