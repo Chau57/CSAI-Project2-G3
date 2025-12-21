@@ -56,142 +56,57 @@ class DualLogger(object):
 class TimeoutException(Exception):
     pass
 
-def _run_solver_wrapper(solver_name, grid, result_queue):
-    """Helper function để chạy solver trong process riêng"""
-    # Import lại trong process con
-    import sys
-    import os
-    import time
-    import tracemalloc
-    
-    CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-    PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "../../"))
-    SRC_DIR = os.path.join(PROJECT_ROOT, "src")
-    if SRC_DIR not in sys.path:
-        sys.path.insert(0, SRC_DIR)
-    
-    from solvers.pysat_solver import PySATSolver
-    from solvers.astar_solver import AStarSolver
-    from solvers.backtracking_solver import BacktrackingSolver
-    from solvers.bruteforce_solver import BruteForceSolver
-    from solvers.astar_variants import AStarBasicCNF, AStarWeightedCNF, AStarMomsCNF, AStarJWCNF
-    
-    # Tạo solver object từ tên
-    solver_map = {
-        'PySATSolver': PySATSolver(),
-        'AStarSolver': AStarSolver(),
-        'BacktrackingSolver': BacktrackingSolver(),
-        'BruteForceSolver': BruteForceSolver(),
-        'AStar_Basic': AStarBasicCNF(),
-        'AStar_Weighted': AStarWeightedCNF(),
-        'AStar_MOMs': AStarMomsCNF(),
-        'AStar_JW': AStarJWCNF(),
-    }
-    
-    solver = solver_map.get(solver_name)
-    if not solver:
-        result_queue.put({"error": f"Unknown solver: {solver_name}"})
-        return
-    
-    tracemalloc.start()
-    start_time = time.time()
-    
-    status = "OK"
-    solution = None
-    error_msg = ""
-    
-    try:
-        solution = solver.solve(grid)
-        if solution is None:
-            status = "NO_SOL"
-    except Exception as e:
-        status = "ERROR"
-        error_msg = str(e)
-    finally:
-        end_time = time.time()
-        current_mem, peak_mem = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
-    
-    elapsed_time = end_time - start_time
-    peak_mem_mb = peak_mem / (1024 * 1024)
-    
-    result = {
-        "solver": solver.name,
-        "time": elapsed_time,
-        "memory_mb": peak_mem_mb,
-        "status": status,
-        "solution": solution,
-        "error": error_msg
-    }
-    
-    result_queue.put(result)
+def timeout_handler(signum, frame):
+    raise TimeoutException
 
 class BenchmarkRunner:
     def __init__(self):
         self.solvers = [
-            PySATSolver(),   
-            
-            # Đã chạy trước đó
-            # AStarSolver(), 
-            # BacktrackingSolver(),
-            # BruteForceSolver(),
-            
-            AStarBasicCNF(),
-            AStarWeightedCNF(),
-            # AStarMomsCNF(),
-            # AStarJWCNF(),
+            PySATSolver(),       
+            AStarSolver(),
+            BacktrackingSolver(),
+            BruteForceSolver()
         ]
         self.results = []
 
     def run_solver_safe(self, solver, grid, timeout):
-        """Chạy solver với timeout, cross-platform (Windows compatible)"""
-        import copy
+        """Chạy solver với timeout và đo memory."""
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout)
+
+        tracemalloc.start()
+        start_time = time.time()
         
-        # Tạo Queue để nhận kết quả từ process con
-        result_queue = Queue()
+        status = "OK"
+        solution = None
+        error_msg = ""
         
-        # Tạo Process với target function
-        process = Process(
-            target=_run_solver_wrapper,
-            args=(solver.name, copy.deepcopy(grid), result_queue)
-        )
-        
-        # Start process và đợi với timeout
-        process.start()
-        process.join(timeout=timeout)
-        
-        # Nếu process vẫn còn alive sau timeout -> Kill nó
-        if process.is_alive():
-            print(f"    [TIMEOUT] Killing process after {timeout}s...")
-            process.terminate()  # Gửi SIGTERM
-            process.join(timeout=5)  # Đợi 5s để terminate
-            
-            if process.is_alive():
-                process.kill()  # Force kill nếu terminate không work
-                process.join()
-            
-            return {
-                "solver": solver.name,
-                "time": timeout,
-                "memory_mb": 0,
-                "status": "TIMEOUT",
-                "solution": None,
-                "error": ""
-            }
-        
-        # Lấy kết quả từ queue (nếu có)
-        if not result_queue.empty():
-            return result_queue.get()
-        else:
-            # Process đã chết mà không trả về kết quả
-            return {
-                "solver": solver.name,
-                "time": 0,
-                "memory_mb": 0,
-                "status": "ERROR",
-                "solution": None,
-                "error": "Process terminated without returning result"
-            }
+        try:
+            solution = solver.solve(grid)
+            if solution is None:
+                status = "NO_SOL"
+        except TimeoutException:
+            status = "TIMEOUT"
+        except Exception as e:
+            status = "ERROR"
+            error_msg = str(e)
+        finally:
+            signal.alarm(0)
+            end_time = time.time()
+            current_mem, peak_mem = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
+
+        elapsed_time = end_time - start_time
+        peak_mem_mb = peak_mem / (1024 * 1024)
+
+        return {
+            "solver": solver.name,
+            "time": elapsed_time,
+            "memory_mb": peak_mem_mb,
+            "status": status,
+            "solution": solution,
+            "error": error_msg
+        }
 
     def check_correctness(self, ref_solution, test_solution):
         if ref_solution is None and test_solution is None: return True
@@ -313,22 +228,6 @@ class BenchmarkRunner:
 
 # --- MAIN ---
 if __name__ == "__main__":
-    # Cần thiết cho multiprocessing trên Windows
-    multiprocessing.freeze_support()
-    
-    # 1. Đảm bảo thư mục output tồn tại trước
-    os.makedirs(OUTPUT_BASE_DIR, exist_ok=True)
-
-    # 2. Thiết lập đường dẫn file log
-    log_file_path = os.path.join(OUTPUT_BASE_DIR, OUTPUT_LOG_TXT)
-
-    # 3. Kích hoạt DualLogger: Chuyển hướng print vào cả file và màn hình
-    # Từ dòng này trở đi, mọi lệnh print() sẽ tự động ghi vào log_file_path
-    sys.stdout = DualLogger(log_file_path)
-
-    print(f"Logging started. Log file: {log_file_path}")
-
-    # 4. Chạy Benchmark
     runner = BenchmarkRunner()
     runner.run_all()
     runner.generate_report()
