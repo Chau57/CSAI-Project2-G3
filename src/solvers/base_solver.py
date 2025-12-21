@@ -20,7 +20,6 @@ class BaseSolver(ABC):
         """Initialize solver"""
         self.name = self.__class__.__name__
         self.solve_time = 0.0
-        self.nodes_explored = 0
         self.solution_found = False
     
     @abstractmethod
@@ -62,7 +61,6 @@ class BaseSolver(ABC):
         return {
             'solver': self.name,
             'time': self.solve_time,
-            'nodes_explored': self.nodes_explored,
             'solution_found': self.solution_found
         }
     
@@ -71,5 +69,4 @@ class BaseSolver(ABC):
         stats = self.get_stats()
         print(f"\n=== {self.name} Statistics ===")
         print(f"Time: {stats['time']:.4f}s")
-        print(f"Nodes explored: {stats['nodes_explored']}")
         print(f"Solution found: {stats['solution_found']}")

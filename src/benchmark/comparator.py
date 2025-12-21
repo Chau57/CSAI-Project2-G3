@@ -1,28 +1,31 @@
+"""
+Benchmark comparator for Hashiwokakero solvers.
+Provides functionality to compare and benchmark multiple solver implementations
+with timeout support and memory tracking (cross-platform compatible).
+"""
+
 import sys
 import os
 import time
-import signal
 import glob
 import tracemalloc
 import pandas as pd
+import threading
+import copy
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
-# --- 1. SETUP PATHS TỰ ĐỘNG ---
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "../../"))
 
-# Trỏ đúng vào thư mục data
 INPUT_DIR = os.path.join(PROJECT_ROOT, "data", "inputs")
 OUTPUT_BASE_DIR = os.path.join(PROJECT_ROOT, "data", "outputs")
 
-# Tên file log và báo cáo
 OUTPUT_REPORT_CSV = "benchmark_report.csv"
 OUTPUT_LOG_TXT = "log_chay_thuc_te.txt" 
 
 MAX_TIMEOUT_SECONDS = 300 
 
-# Fix import lỗi
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
@@ -34,50 +37,120 @@ from solvers.bruteforce_solver import BruteForceSolver
 from utils.io_handler import read_input
 from solvers.astar_variants import AStarBasicCNF, AStarWeightedCNF, AStarMomsCNF
 
-# --- CLASS LOGGER ĐỂ GHI SONG SONG (Màn hình + File) ---
+
 class DualLogger(object):
+    """
+    Logger that writes output to both terminal and a file simultaneously.
+    """
+    
     def __init__(self, filename):
+        """
+        Initialize dual logger.
+        
+        Args:
+            filename (str): Path to the log file
+        """
         self.terminal = sys.stdout
         self.log = open(filename, "w", encoding='utf-8')
 
     def write(self, message):
-        self.terminal.write(message) # Ghi ra màn hình
-        self.log.write(message)      # Ghi vào file
-        self.log.flush()             # Lưu ngay lập tức để không mất dữ liệu nếu crash
+        """
+        Write message to both terminal and log file.
+        
+        Args:
+            message (str): Message to write
+        """
+        self.terminal.write(message)
+        self.log.write(message)
+        self.log.flush()
 
     def flush(self):
-        # Hàm này cần thiết cho python 3 khi dùng flush=True
+        """Flush both terminal and log file buffers."""
         self.terminal.flush()
         self.log.flush()
 
-# --- CÁC CLASS CŨ GIỮ NGUYÊN ---
 
 class TimeoutException(Exception):
+    """Exception raised when a solver execution times out."""
     pass
 
-def timeout_handler(signum, frame):
-    raise TimeoutException
+
+class SolverRunner:
+    """
+    Helper class to run a solver in a separate thread with timeout support.
+    This provides cross-platform timeout functionality.
+    """
+    
+    def __init__(self, solver, grid):
+        """
+        Initialize solver runner.
+        
+        Args:
+            solver: Solver instance to run
+            grid: Puzzle grid to solve
+        """
+        self.solver = solver
+        self.grid = grid
+        self.solution = None
+        self.exception = None
+        self.thread = None
+        
+    def run(self):
+        """Execute the solver in the current thread."""
+        try:
+            self.solution = self.solver.solve(self.grid)
+        except Exception as e:
+            self.exception = e
+    
+    def start_with_timeout(self, timeout):
+        """
+        Start solver in a separate thread with timeout.
+        
+        Args:
+            timeout (int): Maximum execution time in seconds
+            
+        Returns:
+            bool: True if completed within timeout, False otherwise
+        """
+        self.thread = threading.Thread(target=self.run)
+        self.thread.daemon = True
+        self.thread.start()
+        self.thread.join(timeout)
+        
+        return not self.thread.is_alive()
+
 
 class BenchmarkRunner:
+    """
+    Main benchmark runner for comparing solver performance.
+    """
+    
     def __init__(self):
+        """Initialize benchmark runner with default solvers."""
         self.solvers = [
             PySATSolver(),   
-            
-            # Đã chạy trước đó
-            # AStarSolver(), 
-            # BacktrackingSolver(),
-            # BruteForceSolver(),
-            
             AStarBasicCNF(),
             AStarWeightedCNF(),
-            # AStarMomsCNF(),
+            AStarMomsCNF(),
+            AStarSolver(),
+            BacktrackingSolver(),
+            BruteForceSolver(),
         ]
         self.results = []
 
     def run_solver_safe(self, solver, grid, timeout):
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(timeout)
-
+        """
+        Run a solver with timeout and memory tracking.
+        
+        Args:
+            solver: Solver instance to run
+            grid: Puzzle grid to solve
+            timeout (int): Maximum execution time in seconds
+            
+        Returns:
+            dict: Dictionary containing solver performance metrics including
+                  solver name, time, memory usage, status, solution, and errors
+        """
         tracemalloc.start()
         start_time = time.time()
         
@@ -86,16 +159,23 @@ class BenchmarkRunner:
         error_msg = ""
         
         try:
-            solution = solver.solve(grid)
-            if solution is None:
-                status = "NO_SOL"
-        except TimeoutException:
-            status = "TIMEOUT"
+            runner = SolverRunner(solver, copy.deepcopy(grid))
+            completed = runner.start_with_timeout(timeout)
+            
+            if not completed:
+                status = "TIMEOUT"
+            elif runner.exception is not None:
+                status = "ERROR"
+                error_msg = str(runner.exception)
+            else:
+                solution = runner.solution
+                if solution is None:
+                    status = "NO_SOL"
+                    
         except Exception as e:
             status = "ERROR"
             error_msg = str(e)
         finally:
-            signal.alarm(0)
             end_time = time.time()
             current_mem, peak_mem = tracemalloc.get_traced_memory()
             tracemalloc.stop()
@@ -113,8 +193,20 @@ class BenchmarkRunner:
         }
 
     def check_correctness(self, ref_solution, test_solution):
-        if ref_solution is None and test_solution is None: return True
-        if ref_solution is None or test_solution is None: return False
+        """
+        Check if test solution matches reference solution.
+        
+        Args:
+            ref_solution: Reference solution grid
+            test_solution: Test solution grid to compare
+            
+        Returns:
+            bool: True if solutions match, False otherwise
+        """
+        if ref_solution is None and test_solution is None: 
+            return True
+        if ref_solution is None or test_solution is None: 
+            return False
         
         rows = len(ref_solution)
         cols = len(ref_solution[0])
@@ -125,7 +217,16 @@ class BenchmarkRunner:
         return True
 
     def save_solution_file(self, input_filename, solver_name, solution):
-        if solution is None: return
+        """
+        Save solution to output file.
+        
+        Args:
+            input_filename (str): Name of input file
+            solver_name (str): Name of solver
+            solution: Solution grid to save
+        """
+        if solution is None: 
+            return
 
         solver_dir = os.path.join(OUTPUT_BASE_DIR, solver_name)
         if not os.path.exists(solver_dir):
@@ -143,6 +244,10 @@ class BenchmarkRunner:
             print(f"    [Warning] Could not save file {output_path}: {e}")
 
     def run_all(self):
+        """
+        Run benchmark on all input files in the input directory.
+        Tests all configured solvers and generates performance report.
+        """
         input_files = sorted(glob.glob(os.path.join(INPUT_DIR, "input-*.txt")))
         
         print(f"Found {len(input_files)} inputs.")
@@ -159,7 +264,6 @@ class BenchmarkRunner:
                 print(f"  Err reading file: {e}")
                 continue
 
-            # --- 1. Run PySAT (Ground Truth) ---
             print(f"  > PySATSolver (Reference)...", end=" ", flush=True)
             pysat_res = self.run_solver_safe(self.solvers[0], grid, timeout=60)
             
@@ -172,11 +276,9 @@ class BenchmarkRunner:
 
             self.record_result(filename, pysat_res, True)
 
-            # --- 2. Run other Solvers ---
             for solver in self.solvers[1:]:
                 print(f"  > {solver.name}...", end=" ", flush=True)
                 
-                import copy
                 grid_copy = copy.deepcopy(grid)
                 
                 res = self.run_solver_safe(solver, grid_copy, timeout=MAX_TIMEOUT_SECONDS)
@@ -193,6 +295,14 @@ class BenchmarkRunner:
                 self.record_result(filename, res, is_correct)
 
     def record_result(self, filename, res, is_correct):
+        """
+        Record benchmark result for a single solver run.
+        
+        Args:
+            filename (str): Input filename
+            res (dict): Result dictionary from run_solver_safe
+            is_correct (bool): Whether the solution is correct
+        """
         entry = {
             "Input": filename,
             "Solver": res['solver'],
@@ -207,6 +317,10 @@ class BenchmarkRunner:
         self.results.append(entry)
 
     def generate_report(self):
+        """
+        Generate and save benchmark report to CSV file.
+        Includes summary statistics and per-test results.
+        """
         print("\n" + "="*80)
         print("BENCHMARK REPORT")
         print("="*80)
@@ -230,21 +344,90 @@ class BenchmarkRunner:
         df.to_csv(report_path, index=False)
         print(f"\n[SUCCESS] Report saved to: {report_path}")
 
-# --- MAIN ---
+def compare_solvers_on_single_input(grid, verbose=False):
+    """
+    Compare all solvers on a single input grid.
+    
+    Args:
+        grid: The puzzle grid to solve
+        verbose (bool): Print detailed output
+        
+    Returns:
+        list: List of result dictionaries containing performance metrics
+    """
+    solvers = [
+        PySATSolver(),
+        AStarSolver(),
+        AStarBasicCNF(),
+        AStarWeightedCNF(),
+        AStarMomsCNF(),
+        BacktrackingSolver(),
+        BruteForceSolver(),
+    ]
+    
+    print("\n" + "="*80)
+    print("SOLVER COMPARISON")
+    print("="*80)
+    
+    results = []
+    reference_solution = None
+    
+    runner = BenchmarkRunner()
+    
+    for solver in solvers:
+        if verbose:
+            print(f"\nRunning {solver.name}...")
+        else:
+            print(f"\nRunning {solver.name}...", end=" ", flush=True)
+        
+        grid_copy = copy.deepcopy(grid)
+        
+        result = runner.run_solver_safe(solver, grid_copy, timeout=MAX_TIMEOUT_SECONDS)
+        
+        if result['status'] == 'OK' and reference_solution is None:
+            reference_solution = result['solution']
+        
+        is_correct = False
+        if result['status'] == 'OK' and reference_solution is not None:
+            is_correct = runner.check_correctness(reference_solution, result['solution'])
+        
+        result['correct'] = is_correct
+        results.append(result)
+        
+        if verbose:
+            print(f"  Status: {result['status']}")
+            print(f"  Time: {result['time']:.4f}s")
+            print(f"  Memory: {result['memory_mb']:.4f} MB")
+            print(f"  Correct: {is_correct}")
+            if result['error']:
+                print(f"  Error: {result['error']}")
+        else:
+            print(f"{result['status']} | Time: {result['time']:.4f}s | Memory: {result['memory_mb']:.4f}MB | Correct: {is_correct}")
+    
+    print("\n" + "="*80)
+    print("SUMMARY")
+    print("="*80)
+    print(f"{'Solver':<25} {'Status':<15} {'Time (s)':<12} {'Memory (MB)':<12} {'Correct':<10}")
+    print("-"*80)
+    
+    for result in results:
+        print(f"{result['solver']:<25} {result['status']:<15} "
+              f"{result['time']:<12.4f} {result['memory_mb']:<12.4f} {str(result['correct']):<10}")
+    
+    print("="*80)
+    
+    return results
+
+
 if __name__ == "__main__":
-    # 1. Đảm bảo thư mục output tồn tại trước
     os.makedirs(OUTPUT_BASE_DIR, exist_ok=True)
 
-    # 2. Thiết lập đường dẫn file log
     log_file_path = os.path.join(OUTPUT_BASE_DIR, OUTPUT_LOG_TXT)
 
-    # 3. Kích hoạt DualLogger: Chuyển hướng print vào cả file và màn hình
-    # Từ dòng này trở đi, mọi lệnh print() sẽ tự động ghi vào log_file_path
     sys.stdout = DualLogger(log_file_path)
 
     print(f"Logging started. Log file: {log_file_path}")
 
-    # 4. Chạy Benchmark
     runner = BenchmarkRunner()
     runner.run_all()
     runner.generate_report()

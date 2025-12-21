@@ -9,44 +9,56 @@ import os
 from pathlib import Path
 import glob
 
-# Add src to path
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
 from utils.io_handler import read_input, display_solution
-
-# --- 1. IMPORT ĐẦY ĐỦ CÁC SOLVER ---
 from solvers.pysat_solver import PySATSolver
 from solvers.backtracking_solver import BacktrackingSolver
 from solvers.astar_solver import AStarSolver
 from solvers.bruteforce_solver import BruteForceSolver
-from benchmark.comparator import compare_solvers, print_comparison_table, benchmark_on_multiple_inputs
+from solvers.astar_variants import AStarBasicCNF, AStarWeightedCNF, AStarMomsCNF
+from benchmark.comparator import compare_solvers_on_single_input
 
 def save_to_file_manual(filepath, grid):
-    """Hàm lưu file thủ công để đảm bảo chạy được mọi lúc"""
+    """
+    Save the solution grid to a file in CSV format.
+    
+    Args:
+        filepath (str): Path to the output file
+        grid (List[List[int]]): 2D grid representing the solution
+        
+    Returns:
+        bool: True if save successful, False otherwise
+    """
     try:
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, 'w', encoding='utf-8') as f:
             for row in grid:
-                # Chuyển list thành string nếu cần
                 row_str = [str(x) for x in row]
-                f.write(",".join(row_str) + "\n") # Dùng dấu phẩy cho đúng chuẩn nhóm
+                f.write(",".join(row_str) + "\n")
         return True
     except Exception as e:
         print(f"Error saving file: {e}")
         return False
 
 def main():
-    """Main entry point"""
+    """
+    Main entry point for Hashiwokakero solver.
+    
+    Parses command-line arguments, loads the puzzle, selects the appropriate solver,
+    runs the solver, and saves/displays the solution.
+    """
     parser = argparse.ArgumentParser(description='Hashiwokakero Puzzle Solver')
     
     parser.add_argument('input', help='Path to input file(s).')
     parser.add_argument('-o', '--output', help='Output file path')
     parser.add_argument('-s', '--solver', default='pysat', 
-                        choices=['pysat', 'astar', 'backtracking', 'bruteforce'],
+                        choices=['pysat', 'astar', 'astar_basic', 'astar_weighted', 'astar_moms', 
+                                 'backtracking', 'bruteforce'],
                         help='Solver algorithm')
-    parser.add_argument('-c', '--compare', action='store_true', help='Compare solvers')
-    parser.add_argument('-b', '--benchmark', action='store_true', help='Run benchmark')
+    parser.add_argument('-c', '--compare', action='store_true', 
+                        help='Compare all solvers on the input')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
     
     args = parser.parse_args()
@@ -56,14 +68,9 @@ def main():
         print(f"Error: No files found matching '{args.input}'")
         sys.exit(1)
     
-    if args.benchmark and len(input_files) > 1:
-        benchmark_on_multiple_inputs(input_files, verbose=args.verbose)
-        return
-    
     input_file = input_files[0]
     
     try:
-        # 1. Đọc Input
         if args.verbose:
             print(f"Reading: {input_file}")
         
@@ -75,15 +82,12 @@ def main():
             print(f"Grid size: {rows}x{cols}")
             print(f"Running solver: {args.solver}...")
         
-        # 2. Chọn Solver
         if args.compare:
-            results = compare_solvers(grid, verbose=args.verbose)
-            print_comparison_table(results)
+            compare_solvers_on_single_input(grid, verbose=args.verbose)
             return
-
+        
         solver = None
         
-        # --- 2. SỬA LOGIC CHỌN SOLVER TẠI ĐÂY ---
         if args.solver == 'pysat':
             solver = PySATSolver()
             
@@ -91,16 +95,22 @@ def main():
             solver = BacktrackingSolver()
             
         elif args.solver == 'astar':
-            solver = AStarSolver()  
+            solver = AStarSolver()
+            
+        elif args.solver == 'astar_basic':
+            solver = AStarBasicCNF()
+            
+        elif args.solver == 'astar_weighted':
+            solver = AStarWeightedCNF()
+            
+        elif args.solver == 'astar_moms':
+            solver = AStarMomsCNF()
             
         elif args.solver == 'bruteforce':
             solver = BruteForceSolver()
-        # ----------------------------------------
         
-        # 3. Chạy Solver và ĐO THỜI GIAN
         start_time = time.time()
         
-        # Gọi hàm solve
         if hasattr(solver, 'solve_with_timing'):
             solution = solver.solve_with_timing(grid)
         else:
@@ -108,7 +118,6 @@ def main():
             
         duration = time.time() - start_time
         
-        # 4. In kết quả thời gian
         if solution is None:
             print(f"\n❌ {solver.name} FAILED! Time: {duration:.4f}s")
             sys.exit(1)
@@ -118,7 +127,6 @@ def main():
         if args.verbose and hasattr(solver, 'print_stats'):
             solver.print_stats()
         
-        # 5. Xử lý Lưu File (Tự động nếu không có -o)
         save_path = args.output
         if not save_path:
             input_path_obj = Path(input_file)

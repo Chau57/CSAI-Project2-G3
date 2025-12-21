@@ -257,7 +257,6 @@ class PySATSolver(BaseSolver):
         
         while iteration < max_iterations:
             iteration += 1
-            self.nodes_explored += 1
             
             if not solver.solve():
                 return None
