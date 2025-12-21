@@ -271,11 +271,6 @@ class AStarMomsCNF(AStarCNFBase):
         # Trả về biến có điểm cao nhất
         return max(counts, key=counts.get)
 
-
-# =============================================================================
-# VARIANT 4: A* JEROSLOW-WANG (Two-Sided)
-# =============================================================================
-class AStarJWCNF(AStarCNFBase):
     """
     Chiến lược: Tính trọng số theo hàm mũ (Exponential Weighting).
     - Heuristic: Phạt dựa trên 2^(-length). Clause càng ngắn phạt càng đau.

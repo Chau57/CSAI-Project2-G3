@@ -1,0 +1,72 @@
+Logging started. Log file: /Volumes/SSD/VanTruongMuon/CSAI-Project2-G3/data/outputs/log_chay_thuc_te.txt
+Found 11 inputs.
+Saving outputs to: /Volumes/SSD/VanTruongMuon/CSAI-Project2-G3/data/outputs
+--------------------------------------------------------------------------------
+
+Processing: input-00.txt...
+  > PySATSolver (Reference)... Done (0.0027s)
+  > AStar_MOMs... OK | Time: 3.0016s | Correct: True
+  > AStar_JW... OK | Time: 0.4636s | Correct: True
+
+Processing: input-01.txt...
+  > PySATSolver (Reference)... Done (0.0024s)
+  > AStar_MOMs... TIMEOUT | Time: 300.0081s | Correct: False
+  > AStar_JW... TIMEOUT | Time: 300.0144s | Correct: False
+
+Processing: input-02.txt...
+  > PySATSolver (Reference)... Done (0.0212s)
+  > AStar_MOMs... TIMEOUT | Time: 300.0099s | Correct: False
+  > AStar_JW... OK | Time: 171.4994s | Correct: False
+
+Processing: input-03.txt...
+  > PySATSolver (Reference)... Done (0.0104s)
+  > AStar_MOMs... TIMEOUT | Time: 300.0047s | Correct: False
+  > AStar_JW... TIMEOUT | Time: 299.9747s | Correct: False
+
+Processing: input-04.txt...
+  > PySATSolver (Reference)... Done (0.0233s)
+  > AStar_MOMs... TIMEOUT | Time: 300.1517s | Correct: False
+  > AStar_JW... TIMEOUT | Time: 299.9959s | Correct: False
+
+Processing: input-05.txt...
+  > PySATSolver (Reference)... Done (0.0330s)
+  > AStar_MOMs... TIMEOUT | Time: 301.2770s | Correct: False
+  > AStar_JW... TIMEOUT | Time: 300.0603s | Correct: False
+
+Processing: input-06.txt...
+  > PySATSolver (Reference)... Done (0.0928s)
+  > AStar_MOMs... TIMEOUT | Time: 300.1135s | Correct: False
+  > AStar_JW... TIMEOUT | Time: 300.0036s | Correct: False
+
+Processing: input-07.txt...
+  > PySATSolver (Reference)... Done (0.0765s)
+  > AStar_MOMs... TIMEOUT | Time: 300.1784s | Correct: False
+  > AStar_JW... TIMEOUT | Time: 300.0010s | Correct: False
+
+Processing: input-08.txt...
+  > PySATSolver (Reference)... Done (0.0626s)
+  > AStar_MOMs... TIMEOUT | Time: 300.1063s | Correct: False
+  > AStar_JW... TIMEOUT | Time: 299.9962s | Correct: False
+
+Processing: input-09.txt...
+  > PySATSolver (Reference)... Done (0.1219s)
+  > AStar_MOMs... TIMEOUT | Time: 300.0453s | Correct: False
+  > AStar_JW... TIMEOUT | Time: 299.9932s | Correct: False
+
+Processing: input-10.txt...
+  > PySATSolver (Reference)... Done (0.8549s)
+  > AStar_MOMs... TIMEOUT | Time: 300.0628s | Correct: False
+  > AStar_JW... TIMEOUT | Time: 300.0029s | Correct: False
+
+================================================================================
+BENCHMARK REPORT
+================================================================================
+
+--- Summary ---
+             Pass 1min  Pass 2min  Pass 5min  Total
+Solver                                             
+AStar_JW             1          1          2     11
+AStar_MOMs           1          1          1     11
+PySATSolver         11         11         11     11
+
+[SUCCESS] Report saved to: /Volumes/SSD/VanTruongMuon/CSAI-Project2-G3/data/outputs/benchmark_report.csv
