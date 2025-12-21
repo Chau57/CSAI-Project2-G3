@@ -1,85 +1,199 @@
 import sys
 import os
 import time
-import signal
 import glob
 import tracemalloc
 import pandas as pd
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+import multiprocessing
+from multiprocessing import Process, Queue
 
-# --- Setup Paths ---
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# --- 1. SETUP PATHS TỰ ĐỘNG ---
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "../../"))
+
+# Trỏ đúng vào thư mục data
+INPUT_DIR = os.path.join(PROJECT_ROOT, "data", "inputs")
+OUTPUT_BASE_DIR = os.path.join(PROJECT_ROOT, "data", "outputs")
+
+# Tên file log và báo cáo
+OUTPUT_REPORT_CSV = "benchmark_report.csv"
+OUTPUT_LOG_TXT = "log_chay_thuc_te.txt" 
+
+MAX_TIMEOUT_SECONDS = 300 
+
+# Fix import lỗi
+SRC_DIR = os.path.join(PROJECT_ROOT, "src")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
 
 from solvers.pysat_solver import PySATSolver
 from solvers.astar_solver import AStarSolver
 from solvers.backtracking_solver import BacktrackingSolver
 from solvers.bruteforce_solver import BruteForceSolver
 from utils.io_handler import read_input
+from solvers.astar_variants import AStarBasicCNF, AStarWeightedCNF, AStarMomsCNF, AStarJWCNF
 
-# --- CONFIGURATION ---
-INPUT_DIR = "../data/inputs"
-OUTPUT_BASE_DIR = "../data/outputs"  
-OUTPUT_REPORT_CSV = "benchmark_report.csv"
-MAX_TIMEOUT_SECONDS = 300 
+# --- CLASS LOGGER ĐỂ GHI SONG SONG (Màn hình + File) ---
+class DualLogger(object):
+    def __init__(self, filename):
+        self.terminal = sys.stdout
+        self.log = open(filename, "w", encoding='utf-8')
+
+    def write(self, message):
+        self.terminal.write(message) # Ghi ra màn hình
+        self.log.write(message)      # Ghi vào file
+        self.log.flush()             # Lưu ngay lập tức để không mất dữ liệu nếu crash
+
+    def flush(self):
+        # Hàm này cần thiết cho python 3 khi dùng flush=True
+        self.terminal.flush()
+        self.log.flush()
+
+# --- CÁC CLASS CŨ GIỮ NGUYÊN ---
 
 class TimeoutException(Exception):
     pass
 
-def timeout_handler(signum, frame):
-    raise TimeoutException
+def _run_solver_wrapper(solver_name, grid, result_queue):
+    """Helper function để chạy solver trong process riêng"""
+    # Import lại trong process con
+    import sys
+    import os
+    import time
+    import tracemalloc
+    
+    CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+    PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "../../"))
+    SRC_DIR = os.path.join(PROJECT_ROOT, "src")
+    if SRC_DIR not in sys.path:
+        sys.path.insert(0, SRC_DIR)
+    
+    from solvers.pysat_solver import PySATSolver
+    from solvers.astar_solver import AStarSolver
+    from solvers.backtracking_solver import BacktrackingSolver
+    from solvers.bruteforce_solver import BruteForceSolver
+    from solvers.astar_variants import AStarBasicCNF, AStarWeightedCNF, AStarMomsCNF, AStarJWCNF
+    
+    # Tạo solver object từ tên
+    solver_map = {
+        'PySATSolver': PySATSolver(),
+        'AStarSolver': AStarSolver(),
+        'BacktrackingSolver': BacktrackingSolver(),
+        'BruteForceSolver': BruteForceSolver(),
+        'AStar_Basic': AStarBasicCNF(),
+        'AStar_Weighted': AStarWeightedCNF(),
+        'AStar_MOMs': AStarMomsCNF(),
+        'AStar_JW': AStarJWCNF(),
+    }
+    
+    solver = solver_map.get(solver_name)
+    if not solver:
+        result_queue.put({"error": f"Unknown solver: {solver_name}"})
+        return
+    
+    tracemalloc.start()
+    start_time = time.time()
+    
+    status = "OK"
+    solution = None
+    error_msg = ""
+    
+    try:
+        solution = solver.solve(grid)
+        if solution is None:
+            status = "NO_SOL"
+    except Exception as e:
+        status = "ERROR"
+        error_msg = str(e)
+    finally:
+        end_time = time.time()
+        current_mem, peak_mem = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+    
+    elapsed_time = end_time - start_time
+    peak_mem_mb = peak_mem / (1024 * 1024)
+    
+    result = {
+        "solver": solver.name,
+        "time": elapsed_time,
+        "memory_mb": peak_mem_mb,
+        "status": status,
+        "solution": solution,
+        "error": error_msg
+    }
+    
+    result_queue.put(result)
 
 class BenchmarkRunner:
     def __init__(self):
         self.solvers = [
-            PySATSolver(),       
-            AStarSolver(),
-            BacktrackingSolver(),
-            BruteForceSolver()
+            PySATSolver(),   
+            
+            # Đã chạy trước đó
+            # AStarSolver(), 
+            # BacktrackingSolver(),
+            # BruteForceSolver(),
+            
+            AStarBasicCNF(),
+            AStarWeightedCNF(),
+            # AStarMomsCNF(),
+            # AStarJWCNF(),
         ]
         self.results = []
 
     def run_solver_safe(self, solver, grid, timeout):
-        """Chạy solver với timeout và đo memory."""
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(timeout)
-
-        tracemalloc.start()
-        start_time = time.time()
+        """Chạy solver với timeout, cross-platform (Windows compatible)"""
+        import copy
         
-        status = "OK"
-        solution = None
-        error_msg = ""
+        # Tạo Queue để nhận kết quả từ process con
+        result_queue = Queue()
         
-        try:
-            solution = solver.solve(grid)
-            if solution is None:
-                status = "NO_SOL"
-        except TimeoutException:
-            status = "TIMEOUT"
-        except Exception as e:
-            status = "ERROR"
-            error_msg = str(e)
-        finally:
-            signal.alarm(0)
-            end_time = time.time()
-            current_mem, peak_mem = tracemalloc.get_traced_memory()
-            tracemalloc.stop()
-
-        elapsed_time = end_time - start_time
-        peak_mem_mb = peak_mem / (1024 * 1024)
-
-        return {
-            "solver": solver.name,
-            "time": elapsed_time,
-            "memory_mb": peak_mem_mb,
-            "status": status,
-            "solution": solution,
-            "error": error_msg
-        }
+        # Tạo Process với target function
+        process = Process(
+            target=_run_solver_wrapper,
+            args=(solver.name, copy.deepcopy(grid), result_queue)
+        )
+        
+        # Start process và đợi với timeout
+        process.start()
+        process.join(timeout=timeout)
+        
+        # Nếu process vẫn còn alive sau timeout -> Kill nó
+        if process.is_alive():
+            print(f"    [TIMEOUT] Killing process after {timeout}s...")
+            process.terminate()  # Gửi SIGTERM
+            process.join(timeout=5)  # Đợi 5s để terminate
+            
+            if process.is_alive():
+                process.kill()  # Force kill nếu terminate không work
+                process.join()
+            
+            return {
+                "solver": solver.name,
+                "time": timeout,
+                "memory_mb": 0,
+                "status": "TIMEOUT",
+                "solution": None,
+                "error": ""
+            }
+        
+        # Lấy kết quả từ queue (nếu có)
+        if not result_queue.empty():
+            return result_queue.get()
+        else:
+            # Process đã chết mà không trả về kết quả
+            return {
+                "solver": solver.name,
+                "time": 0,
+                "memory_mb": 0,
+                "status": "ERROR",
+                "solution": None,
+                "error": "Process terminated without returning result"
+            }
 
     def check_correctness(self, ref_solution, test_solution):
-        """So sánh output với PySAT"""
         if ref_solution is None and test_solution is None: return True
         if ref_solution is None or test_solution is None: return False
         
@@ -92,25 +206,18 @@ class BenchmarkRunner:
         return True
 
     def save_solution_file(self, input_filename, solver_name, solution):
-        """Lưu kết quả ra file text vào thư mục outputs/SolverName/"""
-        if solution is None:
-            return
+        if solution is None: return
 
-        # Tạo đường dẫn: data/outputs/TenThuatToan
         solver_dir = os.path.join(OUTPUT_BASE_DIR, solver_name)
         if not os.path.exists(solver_dir):
             os.makedirs(solver_dir)
 
-        # Đổi tên input-xx.txt -> output-xx.txt
         output_filename = input_filename.replace("input", "output")
         output_path = os.path.join(solver_dir, output_filename)
 
         try:
             with open(output_path, 'w') as f:
-                # Nếu solution là list of strings (như PySAT trả về)
-                # Hoặc list of list of chars. Cần đảm bảo format string.
                 for row in solution:
-                    # Nối các ký tự trong row thành chuỗi nếu nó là list
                     line = ",".join(str(cell) for cell in row)
                     f.write(line + "\n")
         except Exception as e:
@@ -140,7 +247,6 @@ class BenchmarkRunner:
             ground_truth_sol = pysat_res['solution']
             if pysat_res['status'] == 'OK':
                 print(f"Done ({pysat_res['time']:.4f}s)")
-                # Lưu file kết quả của PySAT
                 self.save_solution_file(filename, "PySATSolver", pysat_res['solution'])
             else:
                 print(f"Failed ({pysat_res['status']})")
@@ -151,21 +257,17 @@ class BenchmarkRunner:
             for solver in self.solvers[1:]:
                 print(f"  > {solver.name}...", end=" ", flush=True)
                 
-                # Deepcopy grid để an toàn
                 import copy
                 grid_copy = copy.deepcopy(grid)
                 
                 res = self.run_solver_safe(solver, grid_copy, timeout=MAX_TIMEOUT_SECONDS)
                 
-                # Check đúng sai
                 is_correct = False
                 if res['status'] == 'OK':
                     if ground_truth_sol:
                         is_correct = self.check_correctness(ground_truth_sol, res['solution'])
                     else:
                         is_correct = True
-                    
-                    # --- LƯU FILE KẾT QUẢ ---
                     self.save_solution_file(filename, solver.name, res['solution'])
                 
                 print(f"{res['status']} | Time: {res['time']:.4f}s | Correct: {is_correct}")
@@ -190,17 +292,43 @@ class BenchmarkRunner:
         print("BENCHMARK REPORT")
         print("="*80)
         
+        if not self.results:
+            print("[Warning] No results to save.")
+            return
+
         df = pd.DataFrame(self.results)
         
         print("\n--- Summary ---")
-        summary = df.groupby("Solver")[["Pass 1min", "Pass 2min", "Pass 5min"]].sum()
-        summary["Total"] = df["Input"].nunique()
-        print(summary)
+        try:
+            summary = df.groupby("Solver")[["Pass 1min", "Pass 2min", "Pass 5min"]].sum()
+            summary["Total"] = df["Input"].nunique()
+            print(summary)
+        except Exception:
+            pass
         
-        df.to_csv(OUTPUT_REPORT_CSV, index=False)
-        print(f"\nReport saved to {OUTPUT_REPORT_CSV}")
+        report_path = os.path.join(OUTPUT_BASE_DIR, OUTPUT_REPORT_CSV)
+        os.makedirs(OUTPUT_BASE_DIR, exist_ok=True)
+        df.to_csv(report_path, index=False)
+        print(f"\n[SUCCESS] Report saved to: {report_path}")
 
+# --- MAIN ---
 if __name__ == "__main__":
+    # Cần thiết cho multiprocessing trên Windows
+    multiprocessing.freeze_support()
+    
+    # 1. Đảm bảo thư mục output tồn tại trước
+    os.makedirs(OUTPUT_BASE_DIR, exist_ok=True)
+
+    # 2. Thiết lập đường dẫn file log
+    log_file_path = os.path.join(OUTPUT_BASE_DIR, OUTPUT_LOG_TXT)
+
+    # 3. Kích hoạt DualLogger: Chuyển hướng print vào cả file và màn hình
+    # Từ dòng này trở đi, mọi lệnh print() sẽ tự động ghi vào log_file_path
+    sys.stdout = DualLogger(log_file_path)
+
+    print(f"Logging started. Log file: {log_file_path}")
+
+    # 4. Chạy Benchmark
     runner = BenchmarkRunner()
     runner.run_all()
     runner.generate_report()
