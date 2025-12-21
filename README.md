@@ -153,8 +153,6 @@ Jupyter notebook với visualizations:
 - Execution time (seconds)
 - Memory usage (MB)
 - Success rate (%)
-- Nodes explored (cho search algorithms)
-
 
 **Tất cả thành viên đều tham gia:**
 - Code review và testing
