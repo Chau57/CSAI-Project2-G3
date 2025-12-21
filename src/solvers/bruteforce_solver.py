@@ -16,13 +16,19 @@ class BruteForceSolver(BaseSolver):
 
     def __init__(self):
         super().__init__()
-        self.name = "BruteForceSolver" # <--- CẦN CÓ ĐỂ TẠO THƯ MỤC OUTPUT
+        self.name = "BruteForceSolver" # Required for creating output directory
 
     def solve(self, grid_or_puzzle) -> Optional[List[List[str]]]:
         """
-        Attempt to solve the puzzle by enumerating all states.
+        Solve the puzzle by enumerating all possible bridge assignments.
+        
+        Args:
+            grid_or_puzzle: Either a Puzzle object or a 2D list/array representing the grid
+            
+        Returns:
+            2D list of strings representing the solution, or None if no solution exists
         """
-        # 1. CHUẨN HÓA INPUT (List -> Puzzle)
+        # 1. NORMALIZE INPUT (List -> Puzzle)
         if isinstance(grid_or_puzzle, Puzzle):
             puzzle = grid_or_puzzle
         else:
@@ -30,26 +36,26 @@ class BruteForceSolver(BaseSolver):
 
         num_edges = len(puzzle.edges)
         
-        # Cảnh báo nếu số cạnh quá lớn (vì 3 mũ N tăng rất nhanh)
+        # Warning if number of edges is too large (since 3^N grows exponentially)
         if num_edges > 15:
             print(f"  [Warning] BruteForce: {num_edges} edges -> 3^{num_edges} states. This will be slow!")
 
-        # 2. VÉT CẠN
-        # Mỗi cạnh có thể có 0, 1, hoặc 2 cầu
+        # 2. BRUTE FORCE SEARCH
+        # Each edge can have 0, 1, or 2 bridges
         for assignment in product([0, 1, 2], repeat=num_edges):
-            # Tạo state dict: {edge_id: số_cầu}
+            # Create state dict: {edge_id: num_bridges}
             state = {i: assignment[i] for i in range(num_edges)}
 
             # Constraint checking
-            # Check crossing trước vì nó vi phạm luật vật lý cơ bản
+            # Check crossing first as it violates basic physical rules
             if not check_crossing(puzzle, state):
                 continue
             
-            # Check đủ số cầu trên đảo
+            # Check correct number of bridges on each island
             if not check_degree_exact(puzzle, state):
                 continue
             
-            # Check liên thông (nếu bài toán yêu cầu chặt chẽ)
+            # Check connectivity (if problem requires strict validation)
             if not check_connected(puzzle, state):
                 continue
 
@@ -59,20 +65,29 @@ class BruteForceSolver(BaseSolver):
         return None
 
     def _render_solution(self, puzzle: Puzzle, state: Dict[int, int]) -> List[List[str]]:
-        """Hàm hỗ trợ chuyển đổi trạng thái số sang lưới ký tự"""
-        # Copy grid gốc
+        """
+        Convert numeric state to character grid representation.
+        
+        Args:
+            puzzle: The Puzzle object containing grid and edge information
+            state: Dictionary mapping edge_id to number of bridges (0, 1, or 2)
+            
+        Returns:
+            2D list of strings representing the solution grid
+        """
+        # Copy original grid
         result = [[str(cell) for cell in row] for row in puzzle.grid]
         
         for edge in puzzle.edges:
             bridges = state.get(edge.id, 0)
             if bridges > 0:
-                # Chọn ký tự dựa trên hướng và số lượng cầu
+                # Choose symbol based on direction and number of bridges
                 if edge.direction == 'H':
                     symbol = '=' if bridges == 2 else '-'
                 else:
                     symbol = '$' if bridges == 2 else '|'
                 
-                # Điền vào các ô giữa 2 đảo
+                # Fill in cells between two islands
                 for r, c in edge.cells:
                     result[r][c] = symbol
         return result

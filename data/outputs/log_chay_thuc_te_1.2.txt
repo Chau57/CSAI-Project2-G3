@@ -1,0 +1,72 @@
+Logging started. Log file: /Volumes/SSD/VanTruongMuon/CSAI-Project2-G3/data/outputs/log_chay_thuc_te.txt
+Found 11 inputs.
+Saving outputs to: /Volumes/SSD/VanTruongMuon/CSAI-Project2-G3/data/outputs
+--------------------------------------------------------------------------------
+
+Processing: input-00.txt...
+  > PySATSolver (Reference)... Done (0.0022s)
+  > AStar_Basic... OK | Time: 13.6836s | Correct: True
+  > AStar_Weighted... OK | Time: 18.1079s | Correct: True
+
+Processing: input-01.txt...
+  > PySATSolver (Reference)... Done (0.0039s)
+  > AStar_Basic... TIMEOUT | Time: 299.9926s | Correct: False
+  > AStar_Weighted... TIMEOUT | Time: 299.9951s | Correct: False
+
+Processing: input-02.txt...
+  > PySATSolver (Reference)... Done (0.0295s)
+  > AStar_Basic... TIMEOUT | Time: 299.9961s | Correct: False
+  > AStar_Weighted... TIMEOUT | Time: 299.9922s | Correct: False
+
+Processing: input-03.txt...
+  > PySATSolver (Reference)... Done (0.0541s)
+  > AStar_Basic... TIMEOUT | Time: 299.9973s | Correct: False
+  > AStar_Weighted... TIMEOUT | Time: 300.0006s | Correct: False
+
+Processing: input-04.txt...
+  > PySATSolver (Reference)... Done (0.0558s)
+  > AStar_Basic... TIMEOUT | Time: 300.0036s | Correct: False
+  > AStar_Weighted... TIMEOUT | Time: 300.0281s | Correct: False
+
+Processing: input-05.txt...
+  > PySATSolver (Reference)... Done (0.0411s)
+  > AStar_Basic... TIMEOUT | Time: 300.0076s | Correct: False
+  > AStar_Weighted... TIMEOUT | Time: 299.9960s | Correct: False
+
+Processing: input-06.txt...
+  > PySATSolver (Reference)... Done (0.0359s)
+  > AStar_Basic... TIMEOUT | Time: 300.0071s | Correct: False
+  > AStar_Weighted... TIMEOUT | Time: 299.9999s | Correct: False
+
+Processing: input-07.txt...
+  > PySATSolver (Reference)... Done (0.0786s)
+  > AStar_Basic... TIMEOUT | Time: 300.1013s | Correct: False
+  > AStar_Weighted... TIMEOUT | Time: 299.9998s | Correct: False
+
+Processing: input-08.txt...
+  > PySATSolver (Reference)... Done (0.0385s)
+  > AStar_Basic... TIMEOUT | Time: 300.0778s | Correct: False
+  > AStar_Weighted... TIMEOUT | Time: 300.0094s | Correct: False
+
+Processing: input-09.txt...
+  > PySATSolver (Reference)... Done (0.1825s)
+  > AStar_Basic... TIMEOUT | Time: 300.0167s | Correct: False
+  > AStar_Weighted... TIMEOUT | Time: 300.0244s | Correct: False
+
+Processing: input-10.txt...
+  > PySATSolver (Reference)... Done (1.6782s)
+  > AStar_Basic... TIMEOUT | Time: 300.0256s | Correct: False
+  > AStar_Weighted... TIMEOUT | Time: 300.0272s | Correct: False
+
+================================================================================
+BENCHMARK REPORT
+================================================================================
+
+--- Summary ---
+                Pass 1min  Pass 2min  Pass 5min  Total
+Solver                                                
+AStar_Basic             1          1          1     11
+AStar_Weighted          1          1          1     11
+PySATSolver            11         11         11     11
+
+[SUCCESS] Report saved to: /Volumes/SSD/VanTruongMuon/CSAI-Project2-G3/data/outputs/benchmark_report.csv

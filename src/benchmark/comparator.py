@@ -1,13 +1,12 @@
 import sys
 import os
 import time
+import signal
 import glob
 import tracemalloc
 import pandas as pd
 from typing import List, Dict, Any, Optional
 from pathlib import Path
-import multiprocessing
-from multiprocessing import Process, Queue
 
 # --- 1. SETUP PATHS TỰ ĐỘNG ---
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -33,7 +32,7 @@ from solvers.astar_solver import AStarSolver
 from solvers.backtracking_solver import BacktrackingSolver
 from solvers.bruteforce_solver import BruteForceSolver
 from utils.io_handler import read_input
-from solvers.astar_variants import AStarBasicCNF, AStarWeightedCNF, AStarMomsCNF, AStarJWCNF
+from solvers.astar_variants import AStarBasicCNF, AStarWeightedCNF, AStarMomsCNF
 
 # --- CLASS LOGGER ĐỂ GHI SONG SONG (Màn hình + File) ---
 class DualLogger(object):
@@ -62,15 +61,20 @@ def timeout_handler(signum, frame):
 class BenchmarkRunner:
     def __init__(self):
         self.solvers = [
-            PySATSolver(),       
-            AStarSolver(),
-            BacktrackingSolver(),
-            BruteForceSolver()
+            PySATSolver(),   
+            
+            # Đã chạy trước đó
+            # AStarSolver(), 
+            # BacktrackingSolver(),
+            # BruteForceSolver(),
+            
+            AStarBasicCNF(),
+            AStarWeightedCNF(),
+            # AStarMomsCNF(),
         ]
         self.results = []
 
     def run_solver_safe(self, solver, grid, timeout):
-        """Chạy solver với timeout và đo memory."""
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(timeout)
 
@@ -228,6 +232,19 @@ class BenchmarkRunner:
 
 # --- MAIN ---
 if __name__ == "__main__":
+    # 1. Đảm bảo thư mục output tồn tại trước
+    os.makedirs(OUTPUT_BASE_DIR, exist_ok=True)
+
+    # 2. Thiết lập đường dẫn file log
+    log_file_path = os.path.join(OUTPUT_BASE_DIR, OUTPUT_LOG_TXT)
+
+    # 3. Kích hoạt DualLogger: Chuyển hướng print vào cả file và màn hình
+    # Từ dòng này trở đi, mọi lệnh print() sẽ tự động ghi vào log_file_path
+    sys.stdout = DualLogger(log_file_path)
+
+    print(f"Logging started. Log file: {log_file_path}")
+
+    # 4. Chạy Benchmark
     runner = BenchmarkRunner()
     runner.run_all()
     runner.generate_report()
